@@ -1,3 +1,6 @@
+!tsconfig.json
+!tsconfig.build.json
+
 node_modules
 npm-debug.log
 dist
