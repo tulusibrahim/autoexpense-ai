@@ -36,60 +36,60 @@ db.pragma("foreign_keys = ON");
 // db.exec(`DROP TABLE IF EXISTS email_filter_settings;`);
 // db.exec(`DROP TABLE IF EXISTS users;`);
 
-// // Create users table
-// db.exec(`
-//   CREATE TABLE users (
-//     id TEXT PRIMARY KEY,
-//     email TEXT NOT NULL UNIQUE,
-//     name TEXT NOT NULL,
-//     picture TEXT,
-//     createdAt TEXT DEFAULT (datetime('now')),
-//     updatedAt TEXT DEFAULT (datetime('now'))
-//   )
-// `);
+// Create users table
+db.exec(`
+  CREATE TABLE users IF NOT EXISTS (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    picture TEXT,
+    createdAt TEXT DEFAULT (datetime('now')),
+    updatedAt TEXT DEFAULT (datetime('now'))
+  )
+`);
 
-// // Create transactions table
-// db.exec(`
-//   CREATE TABLE transactions (
-//     id TEXT PRIMARY KEY,
-//     merchant TEXT NOT NULL,
-//     amount REAL NOT NULL,
-//     currency TEXT NOT NULL,
-//     date TEXT NOT NULL,
-//     category TEXT NOT NULL,
-//     summary TEXT NOT NULL,
-//     isPending INTEGER DEFAULT 0,
-//     type TEXT DEFAULT 'expense',
-//     userId TEXT,
-//     createdAt TEXT DEFAULT (datetime('now')),
-//     updatedAt TEXT DEFAULT (datetime('now')),
-//     FOREIGN KEY (userId) REFERENCES users(id)
-//   )
-// `);
+// Create transactions table
+db.exec(`
+  CREATE TABLE transactions IF NOT EXISTS (
+    id TEXT PRIMARY KEY,
+    merchant TEXT NOT NULL,
+    amount REAL NOT NULL,
+    currency TEXT NOT NULL,
+    date TEXT NOT NULL,
+    category TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    isPending INTEGER DEFAULT 0,
+    type TEXT DEFAULT 'expense',
+    userId TEXT,
+    createdAt TEXT DEFAULT (datetime('now')),
+    updatedAt TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (userId) REFERENCES users(id)
+  )
+`);
 
-// // Create email_filter_settings table
-// db.exec(`
-//   CREATE TABLE email_filter_settings (
-//     id TEXT PRIMARY KEY,
-//     fromEmail TEXT,
-//     subjectKeywords TEXT,
-//     hasAttachment INTEGER DEFAULT 0,
-//     label TEXT,
-//     customQuery TEXT,
-//     userId TEXT,
-//     createdAt TEXT DEFAULT (datetime('now')),
-//     updatedAt TEXT DEFAULT (datetime('now')),
-//     FOREIGN KEY (userId) REFERENCES users(id)
-//   )
-// `);
+// Create email_filter_settings table
+db.exec(`
+  CREATE TABLE email_filter_settings IF NOT EXISTS (
+    id TEXT PRIMARY KEY,
+    fromEmail TEXT,
+    subjectKeywords TEXT,
+    hasAttachment INTEGER DEFAULT 0,
+    label TEXT,
+    customQuery TEXT,
+    userId TEXT,
+    createdAt TEXT DEFAULT (datetime('now')),
+    updatedAt TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (userId) REFERENCES users(id)
+  )
+`);
 
 // Create index for faster queries
-// db.exec(`
-//   CREATE INDEX idx_transactions_date ON transactions(date DESC);
-//   CREATE INDEX idx_transactions_category ON transactions(category);
-//   CREATE INDEX idx_transactions_userId ON transactions(userId);
-//   CREATE INDEX idx_email_filter_settings_userId ON email_filter_settings(userId);
-// `);
+db.exec(`
+  CREATE INDEX idx_transactions_date ON transactions(date DESC);
+  CREATE INDEX idx_transactions_category ON transactions(category);
+  CREATE INDEX idx_transactions_userId ON transactions(userId);
+  CREATE INDEX idx_email_filter_settings_userId ON email_filter_settings(userId);
+`);
 
 // db.exec(`
 //   DROP TABLE IF EXISTS transactions;
