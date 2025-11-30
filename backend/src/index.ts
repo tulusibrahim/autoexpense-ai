@@ -30,53 +30,71 @@ const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
-// Create transactions table if it doesn't exist
-db.exec(`
-  CREATE TABLE IF NOT EXISTS transactions (
-    id TEXT PRIMARY KEY,
-    merchant TEXT NOT NULL,
-    amount REAL NOT NULL,
-    currency TEXT NOT NULL,
-    date TEXT NOT NULL,
-    category TEXT NOT NULL,
-    summary TEXT NOT NULL,
-    isPending INTEGER DEFAULT 0,
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  )
-`);
+// Drop existing tables to recreate with new schema
+// db.exec(`DROP TABLE IF EXISTS transactions;`);
+// db.exec(`DROP TABLE IF EXISTS email_filter_settings;`);
+// db.exec(`DROP TABLE IF EXISTS users;`);
 
-// Remove CHECK constraint if it exists (for existing databases)
-try {
-  db.exec(
-    `ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_category_check`
-  );
-} catch (e) {
-  // Constraint might not exist, ignore error
-}
+// // Create users table
+// db.exec(`
+//   CREATE TABLE users (
+//     id TEXT PRIMARY KEY,
+//     email TEXT NOT NULL UNIQUE,
+//     name TEXT NOT NULL,
+//     picture TEXT,
+//     createdAt TEXT DEFAULT (datetime('now')),
+//     updatedAt TEXT DEFAULT (datetime('now'))
+//   )
+// `);
+
+// // Create transactions table
+// db.exec(`
+//   CREATE TABLE transactions (
+//     id TEXT PRIMARY KEY,
+//     merchant TEXT NOT NULL,
+//     amount REAL NOT NULL,
+//     currency TEXT NOT NULL,
+//     date TEXT NOT NULL,
+//     category TEXT NOT NULL,
+//     summary TEXT NOT NULL,
+//     isPending INTEGER DEFAULT 0,
+//     type TEXT DEFAULT 'expense',
+//     userId TEXT,
+//     createdAt TEXT DEFAULT (datetime('now')),
+//     updatedAt TEXT DEFAULT (datetime('now')),
+//     FOREIGN KEY (userId) REFERENCES users(id)
+//   )
+// `);
+
+// // Create email_filter_settings table
+// db.exec(`
+//   CREATE TABLE email_filter_settings (
+//     id TEXT PRIMARY KEY,
+//     fromEmail TEXT,
+//     subjectKeywords TEXT,
+//     hasAttachment INTEGER DEFAULT 0,
+//     label TEXT,
+//     customQuery TEXT,
+//     userId TEXT,
+//     createdAt TEXT DEFAULT (datetime('now')),
+//     updatedAt TEXT DEFAULT (datetime('now')),
+//     FOREIGN KEY (userId) REFERENCES users(id)
+//   )
+// `);
 
 // Create index for faster queries
-db.exec(`
-  CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date DESC);
-  CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
-`);
-
-// Create email_filter_settings table if it doesn't exist
-db.exec(`
-  CREATE TABLE IF NOT EXISTS email_filter_settings (
-    id TEXT PRIMARY KEY,
-    fromEmail TEXT,
-    subjectKeywords TEXT,
-    hasAttachment INTEGER DEFAULT 0,
-    label TEXT,
-    customQuery TEXT,
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  )
-`);
+// db.exec(`
+//   CREATE INDEX idx_transactions_date ON transactions(date DESC);
+//   CREATE INDEX idx_transactions_category ON transactions(category);
+//   CREATE INDEX idx_transactions_userId ON transactions(userId);
+//   CREATE INDEX idx_email_filter_settings_userId ON email_filter_settings(userId);
+// `);
 
 // db.exec(`
 //   DROP TABLE IF EXISTS transactions;
+// `);
+// db.exec(`
+//   DROP TABLE IF EXISTS email_filter_settings;
 // `);
 
 // Helper to generate unique ID
@@ -95,7 +113,35 @@ const rowToTransaction = (row: any): Transaction => {
     category: row.category as Transaction["category"],
     summary: row.summary,
     isPending: row.isPending === 1,
+    type: row.type || "expense",
+    userId: row.userId,
   };
+};
+
+// Helper to get or create user
+const getOrCreateUser = (profile: any): string => {
+  const checkStmt = db.prepare("SELECT id FROM users WHERE email = ?");
+  const existing = checkStmt.get(profile.email) as any;
+
+  if (existing) {
+    // Update user info if needed
+    const updateStmt = db.prepare(`
+      UPDATE users 
+      SET name = ?, picture = ?, updatedAt = datetime('now')
+      WHERE id = ?
+    `);
+    updateStmt.run(profile.name, profile.picture || null, existing.id);
+    return existing.id;
+  }
+
+  // Create new user
+  const userId = profile.id || generateId();
+  const insertStmt = db.prepare(`
+    INSERT INTO users (id, email, name, picture, createdAt, updatedAt)
+    VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+  `);
+  insertStmt.run(userId, profile.email, profile.name, profile.picture || null);
+  return userId;
 };
 
 // Create Elysia app
@@ -132,7 +178,9 @@ const app = new Elysia({ adapter: node() })
 
       try {
         const profile = await fetchUserProfile(accessToken);
-        return { success: true, data: profile };
+        // Get or create user in database
+        const userId = getOrCreateUser(profile);
+        return { success: true, data: { ...(profile as any), userId } };
       } catch (e) {
         console.error("Failed to fetch user profile:", e);
         set.status = 500;
@@ -150,9 +198,21 @@ const app = new Elysia({ adapter: node() })
   )
 
   // Get all expenses
-  .get("/expenses", () => {
-    const stmt = db.prepare("SELECT * FROM transactions ORDER BY date DESC");
-    const rows = stmt.all();
+  .get("/expenses", ({ query, set }) => {
+    const { userId } = query as { userId?: string };
+
+    if (!userId) {
+      set.status = 400;
+      return {
+        success: false,
+        error: "userId is required",
+      };
+    }
+
+    const stmt = db.prepare(
+      "SELECT * FROM transactions WHERE userId = ? ORDER BY date DESC"
+    );
+    const rows = stmt.all(userId);
     const transactions = rows.map(rowToTransaction);
 
     return {
@@ -162,9 +222,18 @@ const app = new Elysia({ adapter: node() })
   })
 
   // Get single expense by ID
-  .get("/expenses/:id", ({ params, set }) => {
-    const stmt = db.prepare("SELECT * FROM transactions WHERE id = ?");
-    const row = stmt.get(params.id) as any;
+  .get("/expenses/:id", ({ params, query, set }) => {
+    const { userId } = query as { userId?: string };
+
+    if (!userId) {
+      set.status = 400;
+      return { success: false, error: "userId is required" };
+    }
+
+    const stmt = db.prepare(
+      "SELECT * FROM transactions WHERE id = ? AND userId = ?"
+    );
+    const row = stmt.get(params.id, userId) as any;
 
     if (!row) {
       set.status = 404;
@@ -177,18 +246,26 @@ const app = new Elysia({ adapter: node() })
   // Create/Update expense
   .put(
     "/expenses/:id",
-    ({ params, body }) => {
+    ({ params, body, query, set }) => {
       const transactionData = body as Partial<Transaction>;
+      const { userId } = query as { userId?: string };
+
+      if (!userId) {
+        set.status = 400;
+        return { success: false, error: "userId is required" };
+      }
 
       // Check if transaction exists
-      const checkStmt = db.prepare("SELECT id FROM transactions WHERE id = ?");
-      const existing = checkStmt.get(params.id) as any;
+      const checkStmt = db.prepare(
+        "SELECT id FROM transactions WHERE id = ? AND userId = ?"
+      );
+      const existing = checkStmt.get(params.id, userId) as any;
 
       if (!existing) {
         // Create new transaction
         const insertStmt = db.prepare(`
-          INSERT INTO transactions (id, merchant, amount, currency, date, category, summary, isPending, createdAt, updatedAt)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+          INSERT INTO transactions (id, merchant, amount, currency, date, category, summary, isPending, type, userId, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
         `);
 
         insertStmt.run(
@@ -199,7 +276,9 @@ const app = new Elysia({ adapter: node() })
           transactionData.date!,
           transactionData.category!,
           transactionData.summary!,
-          transactionData.isPending ? 1 : 0
+          transactionData.isPending ? 1 : 0,
+          transactionData.type || "expense",
+          userId
         );
 
         const newTransaction: Transaction = {
@@ -211,6 +290,8 @@ const app = new Elysia({ adapter: node() })
           category: transactionData.category!,
           summary: transactionData.summary!,
           isPending: transactionData.isPending || false,
+          type: transactionData.type || "expense",
+          userId: userId,
         };
 
         return { success: true, data: newTransaction };
@@ -219,8 +300,8 @@ const app = new Elysia({ adapter: node() })
       // Update existing transaction
       const updateStmt = db.prepare(`
         UPDATE transactions 
-        SET merchant = ?, amount = ?, currency = ?, date = ?, category = ?, summary = ?, isPending = ?, updatedAt = datetime('now')
-        WHERE id = ?
+        SET merchant = ?, amount = ?, currency = ?, date = ?, category = ?, summary = ?, isPending = ?, type = ?, updatedAt = datetime('now')
+        WHERE id = ? AND userId = ?
       `);
 
       updateStmt.run(
@@ -231,12 +312,16 @@ const app = new Elysia({ adapter: node() })
         transactionData.category!,
         transactionData.summary!,
         transactionData.isPending ? 1 : 0,
-        params.id
+        transactionData.type || "expense",
+        params.id,
+        userId
       );
 
       // Fetch updated transaction
-      const getStmt = db.prepare("SELECT * FROM transactions WHERE id = ?");
-      const updatedRow = getStmt.get(params.id) as any;
+      const getStmt = db.prepare(
+        "SELECT * FROM transactions WHERE id = ? AND userId = ?"
+      );
+      const updatedRow = getStmt.get(params.id, userId) as any;
 
       return { success: true, data: rowToTransaction(updatedRow) };
     },
@@ -249,22 +334,34 @@ const app = new Elysia({ adapter: node() })
         category: t.String(), // Allow any category string
         summary: t.String(),
         isPending: t.Optional(t.Boolean()),
+        type: t.Optional(t.Union([t.Literal("expense"), t.Literal("income")])),
       }),
     }
   )
 
   // Delete expense
-  .delete("/expenses/:id", ({ params, set }) => {
-    const checkStmt = db.prepare("SELECT id FROM transactions WHERE id = ?");
-    const existing = checkStmt.get(params.id) as any;
+  .delete("/expenses/:id", ({ params, query, set }) => {
+    const { userId } = query as { userId?: string };
+
+    if (!userId) {
+      set.status = 400;
+      return { success: false, error: "userId is required" };
+    }
+
+    const checkStmt = db.prepare(
+      "SELECT id FROM transactions WHERE id = ? AND userId = ?"
+    );
+    const existing = checkStmt.get(params.id, userId) as any;
 
     if (!existing) {
       set.status = 404;
       return { success: false, error: "Transaction not found" };
     }
 
-    const deleteStmt = db.prepare("DELETE FROM transactions WHERE id = ?");
-    deleteStmt.run(params.id);
+    const deleteStmt = db.prepare(
+      "DELETE FROM transactions WHERE id = ? AND userId = ?"
+    );
+    deleteStmt.run(params.id, userId);
 
     return { success: true, message: "Transaction deleted" };
   })
@@ -273,11 +370,29 @@ const app = new Elysia({ adapter: node() })
   .post(
     "/expenses/scan",
     async ({ body, set }) => {
-      const { accessToken, isDemoMode, dateFilter } = body as {
+      const { accessToken, isDemoMode, startDate, endDate, userId } = body as {
         accessToken: string | null;
         isDemoMode?: boolean;
-        dateFilter?: "today" | "7days" | "30days" | "lastweek" | "all";
+        startDate?: string;
+        endDate?: string;
+        userId?: string;
       };
+
+      if (!userId) {
+        set.status = 400;
+        return {
+          success: false,
+          error: "userId is required",
+        };
+      }
+
+      if (!isDemoMode && accessToken && (!startDate || !endDate)) {
+        set.status = 400;
+        return {
+          success: false,
+          error: "startDate and endDate are required for real mode",
+        };
+      }
 
       try {
         let emails: string[] = [];
@@ -285,12 +400,12 @@ const app = new Elysia({ adapter: node() })
         if (isDemoMode) {
           // Generate demo emails using Gemini
           emails = await generateDemoEmails();
-        } else if (accessToken) {
-          // Load email filter settings from database
+        } else if (accessToken && startDate && endDate) {
+          // Load email filter settings from database for this user
           const settingsStmt = db.prepare(
-            "SELECT * FROM email_filter_settings ORDER BY updatedAt DESC LIMIT 1"
+            "SELECT * FROM email_filter_settings WHERE userId = ? ORDER BY updatedAt DESC LIMIT 1"
           );
-          const settingsRow = settingsStmt.get() as any;
+          const settingsRow = settingsStmt.get(userId) as any;
 
           const filterOptions = settingsRow
             ? {
@@ -302,11 +417,12 @@ const app = new Elysia({ adapter: node() })
               }
             : undefined;
 
-          // Fetch real emails from Gmail
+          // Fetch real emails from Gmail with date range
           emails = await fetchRecentEmails(
             accessToken,
             10,
-            dateFilter || "30days",
+            startDate,
+            endDate,
             filterOptions
           );
         } else {
@@ -316,7 +432,6 @@ const app = new Elysia({ adapter: node() })
             error: "Access token is required for real mode",
           };
         }
-
         if (emails.length === 0) {
           return { success: true, data: [], message: "No emails found" };
         }
@@ -324,12 +439,12 @@ const app = new Elysia({ adapter: node() })
         // Process emails and extract transactions
         const newTransactions: Transaction[] = [];
         const insertStmt = db.prepare(`
-          INSERT INTO transactions (id, merchant, amount, currency, date, category, summary, isPending, createdAt, updatedAt)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+          INSERT INTO transactions (id, merchant, amount, currency, date, category, summary, isPending, type, userId, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
         `);
         const checkStmt = db.prepare(`
           SELECT id FROM transactions 
-          WHERE merchant = ? AND amount = ? AND date = ?
+          WHERE amount = ? AND date = ? AND userId = ?
         `);
 
         for (const emailBody of emails) {
@@ -338,9 +453,9 @@ const app = new Elysia({ adapter: node() })
           if (transaction) {
             // Check if we already have this transaction (basic deduplication)
             const existing = checkStmt.get(
-              transaction.merchant,
               transaction.amount,
-              transaction.date
+              transaction.date,
+              userId
             ) as any;
 
             if (!existing) {
@@ -353,9 +468,11 @@ const app = new Elysia({ adapter: node() })
                 transaction.date,
                 transaction.category,
                 transaction.summary,
-                transaction.isPending ? 1 : 0
+                transaction.isPending ? 1 : 0,
+                transaction.type || "expense",
+                userId
               );
-              newTransactions.push(transaction);
+              newTransactions.push({ ...transaction, userId });
             }
           }
         }
@@ -379,15 +496,9 @@ const app = new Elysia({ adapter: node() })
       body: t.Object({
         accessToken: t.Nullable(t.String()),
         isDemoMode: t.Optional(t.Boolean()),
-        dateFilter: t.Optional(
-          t.Union([
-            t.Literal("today"),
-            t.Literal("7days"),
-            t.Literal("30days"),
-            t.Literal("lastweek"),
-            t.Literal("all"),
-          ])
-        ),
+        startDate: t.Optional(t.String()),
+        endDate: t.Optional(t.String()),
+        userId: t.String(),
       }),
     }
   )
@@ -404,11 +515,21 @@ const app = new Elysia({ adapter: node() })
   })
 
   // Get email filter settings
-  .get("/settings/email-filters", () => {
+  .get("/settings/email-filters", ({ query, set }) => {
+    const { userId } = query as { userId?: string };
+
+    if (!userId) {
+      set.status = 400;
+      return {
+        success: false,
+        error: "userId is required",
+      };
+    }
+
     const stmt = db.prepare(
-      "SELECT * FROM email_filter_settings ORDER BY updatedAt DESC LIMIT 1"
+      "SELECT * FROM email_filter_settings WHERE userId = ? ORDER BY updatedAt DESC LIMIT 1"
     );
-    const row = stmt.get() as any;
+    const row = stmt.get(userId) as any;
 
     if (!row) {
       return {
@@ -448,21 +569,30 @@ const app = new Elysia({ adapter: node() })
         hasAttachment?: boolean;
         label?: string;
         customQuery?: string;
+        userId?: string;
       };
 
+      if (!settings.userId) {
+        set.status = 400;
+        return {
+          success: false,
+          error: "userId is required",
+        };
+      }
+
       try {
-        // Check if settings exist
+        // Check if settings exist for this user
         const checkStmt = db.prepare(
-          "SELECT id FROM email_filter_settings ORDER BY updatedAt DESC LIMIT 1"
+          "SELECT id FROM email_filter_settings WHERE userId = ? ORDER BY updatedAt DESC LIMIT 1"
         );
-        const existing = checkStmt.get() as any;
+        const existing = checkStmt.get(settings.userId) as any;
 
         if (existing) {
           // Update existing settings
           const updateStmt = db.prepare(`
             UPDATE email_filter_settings
             SET fromEmail = ?, subjectKeywords = ?, hasAttachment = ?, label = ?, customQuery = ?, updatedAt = datetime('now')
-            WHERE id = ?
+            WHERE id = ? AND userId = ?
           `);
           updateStmt.run(
             settings.fromEmail || null,
@@ -470,13 +600,14 @@ const app = new Elysia({ adapter: node() })
             settings.hasAttachment ? 1 : 0,
             settings.label || null,
             settings.customQuery || null,
-            existing.id
+            existing.id,
+            settings.userId
           );
         } else {
           // Create new settings
           const insertStmt = db.prepare(`
-            INSERT INTO email_filter_settings (id, fromEmail, subjectKeywords, hasAttachment, label, customQuery, createdAt, updatedAt)
-            VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+            INSERT INTO email_filter_settings (id, fromEmail, subjectKeywords, hasAttachment, label, customQuery, userId, createdAt, updatedAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
           `);
           insertStmt.run(
             generateId(),
@@ -484,7 +615,8 @@ const app = new Elysia({ adapter: node() })
             settings.subjectKeywords || null,
             settings.hasAttachment ? 1 : 0,
             settings.label || null,
-            settings.customQuery || null
+            settings.customQuery || null,
+            settings.userId
           );
         }
 
@@ -505,6 +637,7 @@ const app = new Elysia({ adapter: node() })
         hasAttachment: t.Optional(t.Boolean()),
         label: t.Optional(t.String()),
         customQuery: t.Optional(t.String()),
+        userId: t.String(),
       }),
     }
   )

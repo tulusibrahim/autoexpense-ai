@@ -12,8 +12,10 @@ import {
   Tag,
   Typography,
   App,
+  DatePicker,
   // message,
 } from "antd";
+import dayjs, { Dayjs } from "dayjs";
 import {
   PlusOutlined,
   FolderOutlined,
@@ -52,7 +54,7 @@ interface DashboardProps {
   isDemoMode: boolean;
 }
 
-type DateFilter = "today" | "7days" | "14days" | "30days" | "lastweek";
+const { RangePicker } = DatePicker;
 
 export const Dashboard: React.FC<DashboardProps> = ({
   accessToken,
@@ -60,11 +62,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
 }) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isScanning, setIsScanning] = useState(false);
-  const [statusMsg, setStatusMsg] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [dateFilter, setDateFilter] = useState<DateFilter>("today");
+  const [scanDateRange, setScanDateRange] = useState<
+    [Dayjs | null, Dayjs | null]
+  >([dayjs().subtract(7, "days"), dayjs()]);
   const [transactionDateFilter, setTransactionDateFilter] =
-    useState<TransactionDateFilter>("all");
+    useState<TransactionDateFilter>("thisweek");
   const [editingTransaction, setEditingTransaction] =
     useState<Transaction | null>(null);
   const [deletingTransaction, setDeletingTransaction] =
@@ -98,22 +101,27 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   const scanInbox = async () => {
+    if (!scanDateRange[0] || !scanDateRange[1]) {
+      message.warning("Please select a date range for scanning.");
+      return;
+    }
+
     setIsScanning(true);
-    setStatusMsg(
-      isDemoMode
-        ? "Generating realistic demo emails..."
-        : "Syncing with Server & Gmail..."
-    );
 
     try {
-      const newItems = await api.scanInbox(accessToken, isDemoMode, dateFilter);
+      const startDate = scanDateRange[0].format("YYYY-MM-DD");
+      const endDate = scanDateRange[1].format("YYYY-MM-DD");
+      const newItems = await api.scanInbox(
+        accessToken,
+        isDemoMode,
+        startDate,
+        endDate
+      );
 
       if (newItems.length === 0) {
         message.info("No new receipts found.");
-        setStatusMsg("");
       } else {
         message.success(`Successfully added ${newItems.length} expenses.`);
-        setStatusMsg("");
         await loadTransactions();
       }
     } catch (error) {
@@ -123,7 +131,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
           ? error.data.details
           : "Failed to scan inbox. Ensure backend is running."
       );
-      setStatusMsg("");
     } finally {
       setIsScanning(false);
     }
@@ -186,16 +193,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Update categories list for filter
   const categoryOptions = ["All", ...categories];
 
-  // Chart Data based on ALL transactions
-  const categoryData = transactions.reduce((acc, curr) => {
-    const existing = acc.find((item) => item.name === curr.category);
-    if (existing) {
-      existing.value += curr.amount;
-    } else {
-      acc.push({ name: curr.category, value: curr.amount });
-    }
-    return acc;
-  }, [] as { name: string; value: number }[]);
+  // Chart Data based on expenses only (not income)
+  const categoryData = transactions
+    .filter((t) => (t.type || "expense") === "expense")
+    .reduce((acc, curr) => {
+      const existing = acc.find((item) => item.name === curr.category);
+      if (existing) {
+        existing.value += curr.amount;
+      } else {
+        acc.push({ name: curr.category, value: curr.amount });
+      }
+      return acc;
+    }, [] as { name: string; value: number }[]);
 
   const COLORS = [
     "#0088FE",
@@ -205,7 +214,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
     "#8884d8",
     "#ffc658",
   ];
-  const totalSpent = filteredTransactions.reduce((sum, t) => sum + t.amount, 0);
+  // Calculate total expenses (only expenses, not income)
+  const totalSpent = filteredTransactions.reduce((sum, t) => {
+    const type = t.type || "expense";
+    return type === "expense" ? sum + t.amount : sum;
+  }, 0);
+
+  // Calculate total income
+  const totalIncome = filteredTransactions.reduce((sum, t) => {
+    const type = t.type || "expense";
+    return type === "income" ? sum + t.amount : sum;
+  }, 0);
+
+  // Calculate net (income - expenses)
+  const netAmount = totalIncome - totalSpent;
 
   return (
     <div style={{ maxWidth: 1280, margin: "0 auto", padding: 24 }}>
@@ -218,20 +240,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </Col>
         <Col>
           <Space size="middle" wrap>
-            {!isDemoMode && (
-              <Select
-                value={dateFilter}
-                onChange={(value) => setDateFilter(value as DateFilter)}
-                disabled={isScanning}
-                style={{ width: 150 }}
-                id="date-filter-select"
-              >
-                <Option value="today">Today</Option>
-                <Option value="7days">Last 7 Days</Option>
-                <Option value="14days">Last 14 Days</Option>
-                <Option value="30days">Last 30 Days</Option>
-              </Select>
-            )}
             <Button
               icon={<PlusOutlined />}
               onClick={() => setIsAddingTransaction(true)}
@@ -266,52 +274,73 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </Col>
       </Row>
 
-      {statusMsg && (
-        <Alert
-          message={statusMsg}
-          type={statusMsg.includes("Error") ? "error" : "info"}
-          showIcon
-          closable
-          onClose={() => setStatusMsg("")}
-          style={{ marginBottom: 24 }}
-        />
-      )}
-
-      {/* Transaction Date Filter */}
-      <Row style={{ marginBottom: 24 }} gutter={[12, 12]}>
-        <Col span={24}>
-          <Space size="small" wrap>
-            <span style={{ color: "#94a3b8", fontSize: 14, fontWeight: 500 }}>
-              Filter by date:
-            </span>
-            {(
-              [
-                "today",
-                "thisweek",
-                "thismonth",
-                "last7days",
-                "last30days",
-                "last90days",
-              ] as TransactionDateFilter[]
-            ).map((filter) => (
-              <Button
-                key={filter}
-                size="small"
-                type={transactionDateFilter === filter ? "primary" : "default"}
-                onClick={() => setTransactionDateFilter(filter)}
-                id={`transaction-date-filter-${filter}-btn`}
+      {/* Filters Section */}
+      <Card
+        style={{
+          marginBottom: 12,
+          background: "#1e293b",
+          borderColor: "#334155",
+        }}
+        bodyStyle={{ padding: 16 }}
+      >
+        <Row gutter={[24, 16]}>
+          {/* Date Range Filter for Display */}
+          <Col xs={24} sm={12} md={8}>
+            <div style={{ marginBottom: 8 }}>
+              <span
+                style={{
+                  color: "#94a3b8",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                }}
               >
-                {getFilterLabel(filter)}
-              </Button>
-            ))}
-          </Space>
-        </Col>
-        <Col>
-          <Space>
-            <span style={{ color: "#94a3b8", fontSize: 14, fontWeight: 500 }}>
-              Transactions:
-            </span>
-            <Space size={8}>
+                Date Range
+              </span>
+            </div>
+            <Space size={8} wrap>
+              {(
+                [
+                  "today",
+                  "thisweek",
+                  "thismonth",
+                  "last7days",
+                  "last30days",
+                  "last90days",
+                ] as TransactionDateFilter[]
+              ).map((filter) => (
+                <Button
+                  key={filter}
+                  size="small"
+                  type={
+                    transactionDateFilter === filter ? "primary" : "default"
+                  }
+                  onClick={() => setTransactionDateFilter(filter)}
+                  id={`transaction-date-filter-${filter}-btn`}
+                >
+                  {getFilterLabel(filter)}
+                </Button>
+              ))}
+            </Space>
+          </Col>
+
+          {/* Category Filter */}
+          <Col xs={24} sm={12} md={8}>
+            <div style={{ marginBottom: 8 }}>
+              <span
+                style={{
+                  color: "#94a3b8",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                }}
+              >
+                Category
+              </span>
+            </div>
+            <Space size={8} wrap>
               {categoryOptions.map((cat) => (
                 <Button
                   key={cat}
@@ -324,13 +353,76 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </Button>
               ))}
             </Space>
-          </Space>
-        </Col>
-      </Row>
+          </Col>
+
+          {/* Email Scan Date Filter (only for real mode) */}
+          {!isDemoMode && (
+            <Col xs={24} sm={12} md={8}>
+              <div style={{ marginBottom: 8 }}>
+                <span
+                  style={{
+                    color: "#94a3b8",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  Scan Period (Max 14 days)
+                </span>
+              </div>
+              <RangePicker
+                value={scanDateRange}
+                onChange={(dates) => {
+                  if (dates && dates[0] && dates[1]) {
+                    const daysDiff = dates[1].diff(dates[0], "day");
+                    if (daysDiff > 14) {
+                      message.warning(
+                        "Date range cannot exceed 14 days. Please select a shorter range."
+                      );
+                      return;
+                    }
+                    if (daysDiff < 0) {
+                      message.warning("End date must be after start date.");
+                      return;
+                    }
+                  }
+                  setScanDateRange(dates as [Dayjs | null, Dayjs | null]);
+                }}
+                disabled={isScanning}
+                style={{ width: "100%" }}
+                format="YYYY-MM-DD"
+                disabledDate={(current) => {
+                  // Disable dates in the future
+                  if (current && current > dayjs().endOf("day")) {
+                    return true;
+                  }
+                  return false;
+                }}
+                onCalendarChange={(dates) => {
+                  // Validate range when selecting dates
+                  if (dates && dates[0] && dates[1]) {
+                    const daysDiff = dates[1].diff(dates[0], "day");
+                    if (daysDiff > 14) {
+                      message.warning(
+                        "Date range cannot exceed 14 days. Please select a shorter range."
+                      );
+                      // Reset to valid range
+                      setScanDateRange([dates[0], dates[0].add(14, "day")]);
+                      return;
+                    }
+                  }
+                }}
+                id="scan-date-range-picker"
+              />
+            </Col>
+          )}
+        </Row>
+      </Card>
 
       {/* Stats Cards */}
-      <Row gutter={[24, 24]} style={{ marginBottom: 24 }}>
-        <Col xs={24} md={12}>
+      <Row gutter={[16, 16]} style={{ marginBottom: 12 }}>
+        <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
               title="Total Expenses"
@@ -340,7 +432,27 @@ export const Dashboard: React.FC<DashboardProps> = ({
             />
           </Card>
         </Col>
-        <Col xs={24} md={12}>
+        <Col xs={24} sm={12} md={6}>
+          <Card>
+            <Statistic
+              title="Total Income"
+              value={totalIncome}
+              formatter={(value) => formatCurrency(Number(value))}
+              valueStyle={{ color: "#10b981" }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card>
+            <Statistic
+              title="Net Amount"
+              value={netAmount}
+              formatter={(value) => formatCurrency(Number(value))}
+              valueStyle={{ color: netAmount >= 0 ? "#10b981" : "#ef4444" }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
               title="Transactions"

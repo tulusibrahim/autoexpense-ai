@@ -13,6 +13,8 @@ export interface Transaction {
     | "Other";
   summary: string;
   isPending?: boolean;
+  type?: "expense" | "income"; // Transaction type: expense or income
+  userId?: string; // User ID to relate transaction to user
 }
 
 export interface UserProfile {

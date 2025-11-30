@@ -2,7 +2,7 @@ import React from "react";
 import { Modal, Button, Space, Typography, Descriptions, Tag } from "antd";
 import { ExclamationCircleOutlined } from "@ant-design/icons";
 import { Transaction } from "../types";
-import { formatCurrency } from "../utils/format";
+import { formatCurrency, formatDate } from "../utils/format";
 
 const { Text } = Typography;
 
@@ -87,7 +87,7 @@ export const DeleteModal: React.FC<DeleteModalProps> = ({
         <Descriptions.Item label="Amount">
           <Text strong>{formatCurrency(transaction.amount)}</Text>
         </Descriptions.Item>
-        <Descriptions.Item label="Date">{transaction.date}</Descriptions.Item>
+        <Descriptions.Item label="Date">{formatDate(transaction.date)}</Descriptions.Item>
         <Descriptions.Item label="Category">
           <Tag color={tagColor}>{transaction.category}</Tag>
         </Descriptions.Item>

@@ -7,6 +7,7 @@ export interface Transaction {
   category: string; // Dynamic category - can be any string
   summary: string;
   isPending?: boolean;
+  type?: "expense" | "income"; // Transaction type: expense or income
 }
 
 export interface EmailMessage {
@@ -24,6 +25,7 @@ export interface UserProfile {
   given_name: string;
   family_name: string;
   picture: string;
+  userId?: string; // Database user ID
 }
 
 export enum AppView {

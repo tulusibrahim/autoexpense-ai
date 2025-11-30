@@ -1,9 +1,12 @@
 import React, { useState } from "react";
-import { Modal, Form, Input, Select, DatePicker, InputNumber, Button, Space } from "antd";
+import { Modal, Form, Input, Select, DatePicker, InputNumber, Button, Space, Radio } from "antd";
 import dayjs, { Dayjs } from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
 import { Transaction } from "../types";
 import { formatNumber, parseFormattedNumber } from "../utils/format";
 import { getCategories } from "../utils/categories";
+
+dayjs.extend(customParseFormat);
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -29,9 +32,12 @@ export const EditModal: React.FC<EditModalProps> = ({
         ...transaction,
         merchant: values.merchant,
         amount: values.amount,
-        date: values.date ? dayjs(values.date).format("YYYY-MM-DD") : transaction.date,
+        date: values.date 
+          ? dayjs(values.date).format("YYYY-MM-DD HH:mm:ss") 
+          : transaction.date,
         category: values.category || "Other",
         summary: values.summary,
+        type: values.type || "expense",
       };
       onSave(updated);
     } catch (error) {
@@ -60,9 +66,12 @@ export const EditModal: React.FC<EditModalProps> = ({
         initialValues={{
           merchant: transaction.merchant,
           amount: transaction.amount,
-          date: transaction.date ? dayjs(transaction.date) : null,
+          date: transaction.date 
+            ? dayjs(transaction.date, ["YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss", "YYYY-MM-DDTHH:mm:ss"], true) 
+            : null,
           category: transaction.category || "Other",
           summary: transaction.summary,
+          type: transaction.type || "expense",
         }}
       >
         <Form.Item
@@ -88,11 +97,16 @@ export const EditModal: React.FC<EditModalProps> = ({
         </Form.Item>
 
         <Form.Item
-          label="Date"
+          label="Date & Time"
           name="date"
-          rules={[{ required: true, message: "Please select date" }]}
+          rules={[{ required: true, message: "Please select date and time" }]}
         >
-          <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" id="edit-date-input" />
+          <DatePicker 
+            showTime 
+            style={{ width: "100%" }} 
+            format="YYYY-MM-DD HH:mm:ss" 
+            id="edit-date-input" 
+          />
         </Form.Item>
 
         <Form.Item
@@ -118,6 +132,17 @@ export const EditModal: React.FC<EditModalProps> = ({
           rules={[{ required: true, message: "Please enter summary" }]}
         >
           <TextArea rows={3} id="edit-summary-input" />
+        </Form.Item>
+
+        <Form.Item
+          label="Type"
+          name="type"
+          rules={[{ required: true, message: "Please select type" }]}
+        >
+          <Radio.Group id="edit-type-radio">
+            <Radio value="expense">Expense</Radio>
+            <Radio value="income">Income</Radio>
+          </Radio.Group>
         </Form.Item>
       </Form>
     </Modal>

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Card, Tag, Button, Space, Avatar, Typography } from "antd";
 import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { Transaction } from "../types";
-import { formatCurrency } from "../utils/format";
+import { formatCurrency, formatDate } from "../utils/format";
 
 const { Text } = Typography;
 
@@ -28,6 +28,8 @@ export const TransactionCard: React.FC<TransactionCardProps> = ({
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const tagColor = categoryColors[transaction.category] || "default";
+  const transactionType = transaction.type || "expense";
+  const amountColor = transactionType === "income" ? "#10b981" : "#e2e8f0"; // Green for income, existing color for expense
 
   return (
     <Card
@@ -91,20 +93,10 @@ export const TransactionCard: React.FC<TransactionCardProps> = ({
                 fontSize: 12,
                 color: "#94a3b8",
                 display: "flex",
-                alignItems: "center",
-                gap: 6,
+                flexDirection: "column",
               }}
             >
-              <span>{transaction.date}</span>
-              <span
-                style={{
-                  width: 3,
-                  height: 3,
-                  borderRadius: "50%",
-                  background: "#475569",
-                  display: "inline-block",
-                }}
-              />
+              <span>{formatDate(transaction.date)}</span>
               <span
                 style={{
                   overflow: "hidden",
@@ -134,11 +126,22 @@ export const TransactionCard: React.FC<TransactionCardProps> = ({
                 fontSize: 16,
                 display: "block",
                 marginBottom: 4,
-                color: "#e2e8f0",
+                color: amountColor,
               }}
             >
               {formatCurrency(transaction.amount)}
             </Text>
+            <Tag
+              color={transactionType === "income" ? "green" : "default"}
+              style={{
+                fontSize: 10,
+                textTransform: "uppercase",
+                fontWeight: 600,
+                marginRight: 8,
+              }}
+            >
+              {transactionType === "income" ? "Income" : "Expense"}
+            </Tag>
             <Tag
               color={tagColor}
               style={{

@@ -25,7 +25,8 @@ const transactionSchema: Schema = {
     },
     date: {
       type: Type.STRING,
-      description: "Date of transaction in YYYY-MM-DD format",
+      description:
+        "Date and time of transaction in ISO 8601 format (YYYY-MM-DDTHH:mm:ss or YYYY-MM-DD HH:mm:ss). Extract the exact date and time from the email if available, otherwise use the date with time 00:00:00",
     },
     category: {
       type: Type.STRING,

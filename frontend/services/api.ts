@@ -9,6 +9,20 @@ interface ApiResponse<T> {
   error?: string;
 }
 
+// Helper to get userId from localStorage
+const getUserId = (): string | null => {
+  const userProfile = localStorage.getItem("user_profile");
+  if (userProfile) {
+    try {
+      const profile = JSON.parse(userProfile) as UserProfile;
+      return profile.userId || profile.id || null;
+    } catch (e) {
+      return null;
+    }
+  }
+  return null;
+};
+
 /**
  * API Service - All backend API calls
  */
@@ -30,7 +44,13 @@ export const api = {
    * Get all expenses
    */
   getExpenses: async (): Promise<Transaction[]> => {
-    const response = await http.get<ApiResponse<Transaction[]>>("/expenses");
+    const userId = getUserId();
+    if (!userId) {
+      throw new Error("User not logged in");
+    }
+    const response = await http.get<ApiResponse<Transaction[]>>("/expenses", {
+      params: { userId },
+    });
     return response.data.data;
   },
 
@@ -38,8 +58,13 @@ export const api = {
    * Get single expense by ID
    */
   getExpense: async (id: string): Promise<Transaction> => {
+    const userId = getUserId();
+    if (!userId) {
+      throw new Error("User not logged in");
+    }
     const response = await http.get<ApiResponse<Transaction>>(
-      `/expenses/${id}`
+      `/expenses/${id}`,
+      { params: { userId } }
     );
     return response.data.data;
   },
@@ -48,8 +73,12 @@ export const api = {
    * Create or update expense
    */
   updateExpense: async (transaction: Transaction): Promise<Transaction> => {
+    const userId = getUserId();
+    if (!userId) {
+      throw new Error("User not logged in");
+    }
     const response = await http.put<ApiResponse<Transaction>>(
-      `/expenses/${transaction.id}`,
+      `/expenses/${transaction.id}?userId=${userId}`,
       transaction
     );
     return response.data.data;
@@ -59,7 +88,11 @@ export const api = {
    * Delete expense
    */
   deleteExpense: async (id: string): Promise<void> => {
-    await http.delete(`/expenses/${id}`);
+    const userId = getUserId();
+    if (!userId) {
+      throw new Error("User not logged in");
+    }
+    await http.delete(`/expenses/${id}`, { params: { userId } });
   },
 
   /**
@@ -68,14 +101,21 @@ export const api = {
   scanInbox: async (
     accessToken: string | null,
     isDemoMode: boolean,
-    dateFilter?: "today" | "7days" | "14days" | "30days" | "lastweek"
+    startDate: string,
+    endDate: string
   ): Promise<Transaction[]> => {
+    const userId = getUserId();
+    if (!userId) {
+      throw new Error("User not logged in");
+    }
     const response = await http.post<ApiResponse<Transaction[]>>(
       "/expenses/scan",
       {
         accessToken,
         isDemoMode,
-        dateFilter: dateFilter || "30days",
+        startDate,
+        endDate,
+        userId,
       }
     );
     return response.data.data;
@@ -102,6 +142,10 @@ export const api = {
     createdAt?: string;
     updatedAt?: string;
   }> => {
+    const userId = getUserId();
+    if (!userId) {
+      throw new Error("User not logged in");
+    }
     const response = await http.get<
       ApiResponse<{
         id?: string;
@@ -113,7 +157,7 @@ export const api = {
         createdAt?: string;
         updatedAt?: string;
       }>
-    >("/settings/email-filters");
+    >("/settings/email-filters", { params: { userId } });
     return response.data.data;
   },
 
@@ -127,6 +171,10 @@ export const api = {
     label?: string;
     customQuery?: string;
   }): Promise<void> => {
-    await http.put("/settings/email-filters", settings);
+    const userId = getUserId();
+    if (!userId) {
+      throw new Error("User not logged in");
+    }
+    await http.put("/settings/email-filters", { ...settings, userId });
   },
 };

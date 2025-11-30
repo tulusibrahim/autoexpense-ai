@@ -53,60 +53,30 @@ export interface EmailFilterOptions {
 export const fetchRecentEmails = async (
   accessToken: string,
   maxResults: number = 10,
-  dateFilter:
-    | "today"
-    | "7days"
-    | "14days"
-    | "30days"
-    | "lastweek"
-    | "all" = "today",
+  startDate: string,
+  endDate: string,
   filterOptions?: EmailFilterOptions
 ): Promise<string[]> => {
   try {
     // Build Gmail query with date filter
     // Gmail API uses YYYY/MM/DD format for dates
-    let dateQuery = "";
-    const today = new Date();
-
-    const formatDate = (date: Date): string => {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      return `${year}/${month}/${day}`;
+    const formatDateForGmail = (dateStr: string): string => {
+      // Convert YYYY-MM-DD to YYYY/MM/DD for Gmail API
+      return dateStr.replace(/-/g, "/");
     };
 
-    switch (dateFilter) {
-      case "today":
-        const todayStart = new Date(today);
-        todayStart.setHours(0, 0, 0, 0);
-        dateQuery = `after:${formatDate(todayStart)}`;
-        break;
-      case "7days":
-        const sevenDaysAgo = new Date(today);
-        sevenDaysAgo.setDate(today.getDate() - 7);
-        dateQuery = `after:${formatDate(sevenDaysAgo)}`;
-        break;
-      case "14days":
-        const fourteenDaysAgo = new Date(today);
-        fourteenDaysAgo.setDate(today.getDate() - 14);
-        dateQuery = `after:${formatDate(fourteenDaysAgo)}`;
-        break;
-      case "30days":
-        const thirtyDaysAgo = new Date(today);
-        thirtyDaysAgo.setDate(today.getDate() - 30);
-        dateQuery = `after:${formatDate(thirtyDaysAgo)}`;
-        break;
-      case "lastweek":
-        // Last week = 7-14 days ago
-        const lastWeekEnd = new Date(today);
-        lastWeekEnd.setDate(today.getDate() - 7);
-        const lastWeekStart = new Date(today);
-        lastWeekStart.setDate(today.getDate() - 14);
-        dateQuery = `after:${formatDate(lastWeekStart)} before:${formatDate(
-          lastWeekEnd
-        )}`;
-        break;
-    }
+    const startDateFormatted = formatDateForGmail(startDate);
+    const endDateFormatted = formatDateForGmail(endDate);
+
+    // Gmail API: after:YYYY/MM/DD before:YYYY/MM/DD
+    // Note: Gmail's "before" is exclusive, so we add 1 day to include the end date
+    const endDatePlusOne = new Date(endDate);
+    endDatePlusOne.setDate(endDatePlusOne.getDate() + 1);
+    const endDateFormattedPlusOne = formatDateForGmail(
+      endDatePlusOne.toISOString().split("T")[0]
+    );
+
+    const dateQuery = `after:${startDateFormatted} before:${endDateFormattedPlusOne}`;
 
     // Build the query string from filter options
     const queryParts: string[] = [];

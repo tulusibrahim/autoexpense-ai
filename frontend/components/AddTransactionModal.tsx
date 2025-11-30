@@ -28,7 +28,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
         merchant: values.merchant,
         amount: values.amount,
         currency: "IDR",
-        date: dayjs(values.date).format("YYYY-MM-DD"),
+        date: dayjs(values.date).format("YYYY-MM-DD HH:mm:ss"),
         category: values.category || categories[0],
         summary: values.summary,
       };
@@ -85,11 +85,16 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
         </Form.Item>
 
         <Form.Item
-          label="Date"
+          label="Date & Time"
           name="date"
-          rules={[{ required: true, message: "Please select date" }]}
+          rules={[{ required: true, message: "Please select date and time" }]}
         >
-          <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" id="add-date-input" />
+          <DatePicker 
+            showTime 
+            style={{ width: "100%" }} 
+            format="YYYY-MM-DD HH:mm:ss" 
+            id="add-date-input" 
+          />
         </Form.Item>
 
         <Form.Item
