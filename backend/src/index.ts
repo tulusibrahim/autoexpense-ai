@@ -147,12 +147,7 @@ const getOrCreateUser = (profile: any): string => {
 
 // Create Elysia app
 const app = new Elysia({ adapter: node() })
-  .use(
-    cors({
-      origin: true, // Allow all origins in dev, restrict in production
-      credentials: true,
-    })
-  )
+  .use(cors())
 
   // Health check endpoint
   .get("/", () => {
