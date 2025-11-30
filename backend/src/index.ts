@@ -84,12 +84,12 @@ db.exec(`
 `);
 
 // Create index for faster queries
-db.exec(`
-  CREATE INDEX idx_transactions_date ON transactions(date DESC);
-  CREATE INDEX idx_transactions_category ON transactions(category);
-  CREATE INDEX idx_transactions_userId ON transactions(userId);
-  CREATE INDEX idx_email_filter_settings_userId ON email_filter_settings(userId);
-`);
+// db.exec(`
+//   CREATE INDEX idx_transactions_date ON transactions(date DESC);
+//   CREATE INDEX idx_transactions_category ON transactions(category);
+//   CREATE INDEX idx_transactions_userId ON transactions(userId);
+//   CREATE INDEX idx_email_filter_settings_userId ON email_filter_settings(userId);
+// `);
 
 // db.exec(`
 //   DROP TABLE IF EXISTS transactions;

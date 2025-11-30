@@ -52,22 +52,14 @@ export const Navbar: React.FC<NavbarProps> = ({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div
+        <img
+          src="/logo.svg"
+          alt="AutoExpense AI Logo"
           style={{
             width: 32,
             height: 32,
-            background: "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)",
-            borderRadius: 8,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "white",
-            fontWeight: "bold",
-            fontSize: 14,
           }}
-        >
-          AE
-        </div>
+        />
         <Text
           strong
           style={{
