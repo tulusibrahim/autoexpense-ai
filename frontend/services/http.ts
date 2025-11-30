@@ -5,8 +5,26 @@ import axios, {
 } from "axios";
 import { triggerLogout } from "./auth";
 
-// API Base URL - can be configured via environment variable
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
+// API Base URL - supports both build-time (Vite) and runtime (window.__APP_CONFIG__) configuration
+const getApiBaseUrl = (): string => {
+  // Priority 1: Runtime config (from config.js injected by Docker entrypoint)
+  if (
+    typeof window !== "undefined" &&
+    (window as any).__APP_CONFIG__?.VITE_API_URL
+  ) {
+    return (window as any).__APP_CONFIG__.VITE_API_URL;
+  }
+
+  // Priority 2: Build-time Vite env variable
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+
+  // Priority 3: Default fallback
+  return "http://localhost:4000";
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Create axios instance with default config
 const http: AxiosInstance = axios.create({

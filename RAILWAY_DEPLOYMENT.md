@@ -74,6 +74,8 @@ NODE_ENV=production
 VITE_API_URL=https://your-backend-service.railway.app
 ```
 
+**Important**: The frontend now supports runtime configuration. The `VITE_API_URL` environment variable will be injected at runtime via the Docker entrypoint script, so it works even if not available at build time.
+
 ## Important Notes
 
 1. **Database Persistence**: Make sure to add a volume at `/app/data` for the backend service to persist SQLite database
@@ -100,6 +102,12 @@ VITE_API_URL=https://your-backend-service.railway.app
 ### CORS Errors
 - Verify `VITE_API_URL` in frontend matches backend URL
 - Check backend CORS configuration
+
+### Frontend Environment Variables Not Working
+- The frontend uses runtime configuration via `config.js`
+- Set `VITE_API_URL` in Railway Variables tab
+- The Docker entrypoint script will inject it at runtime
+- Check browser console for `window.__APP_CONFIG__` to verify it's loaded
 
 ### Port Issues
 - Railway sets PORT automatically
