@@ -38,7 +38,7 @@ db.pragma("foreign_keys = ON");
 
 // Create users table
 db.exec(`
-  CREATE TABLE users IF NOT EXISTS (
+  CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
@@ -50,7 +50,7 @@ db.exec(`
 
 // Create transactions table
 db.exec(`
-  CREATE TABLE transactions IF NOT EXISTS (
+  CREATE TABLE IF NOT EXISTS transactions (
     id TEXT PRIMARY KEY,
     merchant TEXT NOT NULL,
     amount REAL NOT NULL,
@@ -69,7 +69,7 @@ db.exec(`
 
 // Create email_filter_settings table
 db.exec(`
-  CREATE TABLE email_filter_settings IF NOT EXISTS (
+  CREATE TABLE IF NOT EXISTS email_filter_settings (
     id TEXT PRIMARY KEY,
     fromEmail TEXT,
     subjectKeywords TEXT,
