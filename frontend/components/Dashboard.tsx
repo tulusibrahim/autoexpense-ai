@@ -96,7 +96,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       setTransactions(data);
     } catch (error) {
       console.error("Failed to load transactions:", error);
-      message.error("Failed to load expenses. Ensure backend is running.");
+      message.error(
+        error.message ||
+          "Failed to load transactions. Ensure backend is running."
+      );
     }
   };
 
@@ -125,10 +128,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
         await loadTransactions();
       }
     } catch (error) {
-      console.error(error);
       message.error(
-        error.data.details
-          ? error.data.details
+        error.message
+          ? error.message
           : "Failed to scan inbox. Ensure backend is running."
       );
     } finally {

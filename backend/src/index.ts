@@ -403,15 +403,49 @@ const app = new Elysia({ adapter: node() })
           );
           const settingsRow = settingsStmt.get(userId) as any;
 
-          const filterOptions = settingsRow
-            ? {
-                fromEmail: settingsRow.fromEmail || undefined,
-                subjectKeywords: settingsRow.subjectKeywords || undefined,
-                hasAttachment: settingsRow.hasAttachment === 1,
-                label: settingsRow.label || undefined,
-                customQuery: settingsRow.customQuery || undefined,
-              }
-            : undefined;
+          // Check if user has configured at least one filter parameter
+          if (!settingsRow) {
+            set.status = 400;
+            return {
+              success: false,
+              error:
+                "Email filter settings not configured, please set at least one email filter parameter in the email filter",
+            };
+          }
+
+          // Check if at least one filter parameter is set
+          const hasFromEmail =
+            settingsRow.fromEmail && settingsRow.fromEmail.trim() !== "";
+          const hasSubjectKeywords =
+            settingsRow.subjectKeywords &&
+            settingsRow.subjectKeywords.trim() !== "";
+          const hasAttachment = settingsRow.hasAttachment === 1;
+          const hasLabel = settingsRow.label && settingsRow.label.trim() !== "";
+          const hasCustomQuery =
+            settingsRow.customQuery && settingsRow.customQuery.trim() !== "";
+
+          if (
+            !hasFromEmail &&
+            !hasSubjectKeywords &&
+            !hasAttachment &&
+            !hasLabel &&
+            !hasCustomQuery
+          ) {
+            set.status = 400;
+            return {
+              success: false,
+              error:
+                "Email filter settings not configured, please set at least one email filter parameter in the email filter",
+            };
+          }
+
+          const filterOptions = {
+            fromEmail: settingsRow.fromEmail || undefined,
+            subjectKeywords: settingsRow.subjectKeywords || undefined,
+            hasAttachment: settingsRow.hasAttachment === 1,
+            label: settingsRow.label || undefined,
+            customQuery: settingsRow.customQuery || undefined,
+          };
 
           // Fetch real emails from Gmail with date range
           emails = await fetchRecentEmails(
