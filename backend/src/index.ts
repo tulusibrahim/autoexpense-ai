@@ -14,6 +14,7 @@ import { existsSync, mkdirSync } from "fs";
 
 // Configuration
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 4000;
+// Railway provides PORT automatically, use it if available
 const DB_PATH =
   process.env.DB_PATH || join(process.cwd(), "data", "expenses.db");
 
